@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildWidgetDocument } from "../../../../src/canvas/wrap.ts";
 import { BOARD_GRID_GAP, BOARD_GRID_ROW_HEIGHT } from "../../lib/board/grid.ts";
 import type { BoardSnapshot } from "../../lib/board/types.ts";
 import "../../styles/base.css";
@@ -53,6 +54,14 @@ async function mount(applyOps = vi.fn(async () => undefined)): Promise<OpenClawB
     [...view.querySelectorAll("openclaw-board-widget-cell")].map((cell) => cell.updateComplete),
   );
   return view;
+}
+
+async function settleFrames(count = 3): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
 }
 
 function pointer(
@@ -405,9 +414,10 @@ describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
         data: { type: "openclaw:widget-size", height: 300 },
       }),
     );
-    // The card hugs its exact content height (300px + 2x12px card inset); the
-    // ceil-to-row slack stays outside the card as grid background.
-    await vi.waitFor(() => expect(Math.round(first.getBoundingClientRect().height)).toBe(324));
+    // The card hugs its exact content height (300px + 2x12px card inset + the
+    // card's two 1px borders); the ceil-to-row slack stays outside the card as
+    // grid background.
+    await vi.waitFor(() => expect(Math.round(first.getBoundingClientRect().height)).toBe(326));
     expect(second.getBoundingClientRect().top).toBeGreaterThan(secondTopBefore);
 
     const cardBody = first.querySelector<HTMLElement>(".board-widget__body");
@@ -420,6 +430,94 @@ describe.skipIf(!hasBrowserLayout)("openclaw-board-view browser layout", () => {
     second.focus();
     finishDocumentAnimations();
     expect(getComputedStyle(second).borderTopColor).not.toBe("rgba(0, 0, 0, 0)");
+  });
+
+  it("settles an auto-height card on the height its content reported", async () => {
+    const view = await mount();
+    const card = view.querySelector<HTMLElement>('[data-test-id="board-widget"]')!;
+    const frame = card.querySelector<HTMLIFrameElement>("iframe")!;
+
+    // Replay the loop the frame's ResizeObserver drives in production: the
+    // widget reports the height of its own box, the board sizes the card from
+    // that number, and the next report measures whatever box the card left
+    // behind. Reserving less chrome than the card actually spends makes every
+    // round hand back a shorter box, so the widget walks down instead of
+    // holding still. The frame is height:100%, so its box is exactly the space
+    // the card left for the content.
+    const boxes: number[] = [];
+    let reported = 300;
+    for (let round = 0; round < 4; round += 1) {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: frame.contentWindow,
+          data: { type: "openclaw:widget-size", height: reported },
+        }),
+      );
+      await view.updateComplete;
+      await settleFrames();
+      reported = Math.round(frame.getBoundingClientRect().height);
+      boxes.push(reported);
+    }
+
+    expect(boxes).toEqual([300, 300, 300, 300]);
+  });
+
+  it("holds a real widget document steady under the production size reporter", async () => {
+    // The synthetic message cases above drive the loop by hand. This one hands
+    // the frame the document the Gateway actually serves -- buildWidgetDocument
+    // wraps the widget with the production bridge, whose ResizeObserver watches
+    // document.body and posts openclaw:widget-size on its own -- and lets the
+    // real loop run. The widget is the shape the bug report describes: content
+    // that fills whatever box it is given, so a card that reserves less chrome
+    // than it spends hands back a shorter box every round and never settles.
+    const widgetDocument = buildWidgetDocument(
+      "Viewport filling widget",
+      "<style>body{margin:0;min-height:100vh}</style><div>filling</div>",
+    );
+    const view = document.createElement("openclaw-board-view");
+    view.snapshot = { ...structuredClone(source), widgets: [structuredClone(source.widgets[0]!)] };
+    view.activeTabId = "main";
+    view.widgetFrameUrl = () =>
+      `data:text/html;charset=utf-8,${encodeURIComponent(widgetDocument)}`;
+    view.callbacks = {
+      applyOps: vi.fn(async () => undefined),
+      grant: vi.fn(async () => undefined),
+      selectTab: vi.fn(),
+    };
+    document.body.append(view);
+    await view.updateComplete;
+    await Promise.all(
+      [...view.querySelectorAll("openclaw-board-widget-cell")].map((cell) => cell.updateComplete),
+    );
+
+    const card = view.querySelector<HTMLElement>('[data-test-id="board-widget"]')!;
+    const frame = card.querySelector<HTMLIFrameElement>("iframe")!;
+    const reports: number[] = [];
+    const collect = (event: MessageEvent) => {
+      if (
+        event.source === frame.contentWindow &&
+        (event.data as { type?: string } | null)?.type === "openclaw:widget-size"
+      ) {
+        reports.push((event.data as { height: number }).height);
+      }
+    };
+    window.addEventListener("message", collect);
+
+    try {
+      const heights: number[] = [];
+      for (let sample = 0; sample < 12; sample += 1) {
+        await settleFrames(2);
+        heights.push(Math.round(card.getBoundingClientRect().height));
+      }
+
+      // The observer reported at least once, and the card reached a fixed point
+      // instead of stepping down on every round.
+      expect(reports.length).toBeGreaterThan(0);
+      expect(new Set(heights.slice(-8)).size).toBe(1);
+      expect(Math.round(frame.getBoundingClientRect().height)).toBe(reports.at(-1));
+    } finally {
+      window.removeEventListener("message", collect);
+    }
   });
 
   it("rejects tab drop targets owned by another board", async () => {

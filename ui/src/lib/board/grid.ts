@@ -207,6 +207,12 @@ export function toCssPlacement(rect: BoardGridRect): string {
 
 // Keep this numeric inset aligned with the app-level --widget-frame-inset token.
 const BOARD_WIDGET_FRAME_INSET = 12;
+// Mirrors the 1px border on .board-widget in board.css: every presentation keeps
+// the border box (frameless only paints it transparent) and the card is
+// border-box sized, so both edges take from the content area. Omitting them
+// undersizes the card, the iframe's ResizeObserver reports the smaller box back,
+// and the widget steps down again on every resize round instead of settling.
+const BOARD_WIDGET_FRAME_BORDER_PX = 1;
 const BOARD_WIDGET_AUTO_MIN_ROWS = 2;
 const BOARD_WIDGET_AUTO_MAX_ROWS = 20;
 // Mirrors the 38px header grid row in board.css: coarse-pointer layouts keep
@@ -243,6 +249,7 @@ function autoBoardWidgetHeightPx(
   return (
     contentHeightPx +
     chromeRowPx +
+    BOARD_WIDGET_FRAME_BORDER_PX * 2 +
     ((widget.presentation ?? "card") === "card" ? BOARD_WIDGET_FRAME_INSET * 2 : 0)
   );
 }

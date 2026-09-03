@@ -17,10 +17,10 @@ afterEach(() => {
 describe("board widget sizing", () => {
   it("snaps reported HTML heights to rows with card inset and fixed-mode fallbacks", () => {
     const card = boardWidget({ sizeH: 6 });
-    expect(effectiveBoardWidgetRows(card, 100)).toBe(2);
-    expect(effectiveBoardWidgetRows(card, 101)).toBe(3);
-    expect(effectiveBoardWidgetRows({ ...card, presentation: "full-bleed" }, 124)).toBe(2);
-    expect(effectiveBoardWidgetRows({ ...card, presentation: "frameless" }, 125)).toBe(3);
+    expect(effectiveBoardWidgetRows(card, 98)).toBe(2);
+    expect(effectiveBoardWidgetRows(card, 99)).toBe(3);
+    expect(effectiveBoardWidgetRows({ ...card, presentation: "full-bleed" }, 122)).toBe(2);
+    expect(effectiveBoardWidgetRows({ ...card, presentation: "frameless" }, 123)).toBe(3);
     expect(effectiveBoardWidgetRows(card, 1)).toBe(2);
     expect(effectiveBoardWidgetRows(card, 10_000)).toBe(20);
     expect(effectiveBoardWidgetRows(card, 10_000, 0, 240)).toBeGreaterThan(20);
@@ -37,19 +37,53 @@ describe("board widget sizing", () => {
   it("hugs auto cards to their exact content height inside the quantized cell", () => {
     const card = boardWidget({ sizeH: 6 });
     // Card inset adds 12px per edge; frameless/full-bleed report bare content.
-    expect(exactBoardWidgetHeightPx(card, 300)).toBe(324);
-    expect(exactBoardWidgetHeightPx({ ...card, presentation: "frameless" }, 300)).toBe(300);
+    // Every presentation additionally carries the card's two 1px borders.
+    expect(exactBoardWidgetHeightPx(card, 300)).toBe(326);
+    expect(exactBoardWidgetHeightPx({ ...card, presentation: "frameless" }, 300)).toBe(302);
     // Short content hugs below the 2-row cell minimum: the cell keeps its
     // minimum span, only the card shrinks.
-    expect(exactBoardWidgetHeightPx(card, 60)).toBe(84);
+    expect(exactBoardWidgetHeightPx(card, 60)).toBe(86);
     // At the 20-row cap the card fills the cell exactly and the body clips.
     expect(exactBoardWidgetHeightPx(card, 10_000)).toBe(20 * 56 + 19 * 12);
-    expect(exactBoardWidgetHeightPx(card, 10_000, 0, 240)).toBe(10_024);
+    expect(exactBoardWidgetHeightPx(card, 10_000, 0, 240)).toBe(10_026);
     // Coarse-pointer layouts keep the 38px bar in flow, joining the height.
-    expect(exactBoardWidgetHeightPx(card, 300, 38)).toBe(362);
+    expect(exactBoardWidgetHeightPx(card, 300, 38)).toBe(364);
     expect(exactBoardWidgetHeightPx({ ...card, heightMode: "fixed" }, 300)).toBeUndefined();
     expect(exactBoardWidgetHeightPx(card, undefined)).toBeUndefined();
     expect(exactBoardWidgetHeightPx({ ...card, contentKind: "mcp-app" }, 300)).toBeUndefined();
+  });
+
+  it("leaves the reported content height intact inside the card it sizes", () => {
+    // Regression guard for the auto-height shrink loop: the height this returns
+    // is applied to a border-box .board-widget, whose borders, optional touch
+    // row and card inset are all subtracted again before the iframe gets its
+    // box. If the calculation omits any of them the iframe ends up shorter than
+    // it asked for, its ResizeObserver reports the smaller number, and the
+    // widget walks itself down a couple of pixels per resize round.
+    const borders = 2;
+    const inset = 12 * 2;
+    const contentBox = (
+      widget: Parameters<typeof exactBoardWidgetHeightPx>[0],
+      reported: number,
+      chromeRowPx = 0,
+    ): number | undefined => {
+      const outer = exactBoardWidgetHeightPx(widget, reported, chromeRowPx, 240);
+      if (outer === undefined) {
+        return undefined;
+      }
+      const framed = (widget.presentation ?? "card") === "card" ? inset : 0;
+      return outer - borders - chromeRowPx - framed;
+    };
+
+    const card = boardWidget({ sizeH: 6 });
+    for (const presentation of ["card", "full-bleed", "frameless"] as const) {
+      const widget = { ...card, presentation };
+      // Below the row cap the card hugs content exactly, so a second report of
+      // the same height is a no-op rather than another step downwards.
+      expect(contentBox(widget, 300)).toBe(300);
+      expect(contentBox(widget, 166)).toBe(166);
+      expect(contentBox(widget, 300, 38)).toBe(300);
+    }
   });
 
   it("pins the exact reported height on the card and re-fills while dragging", async () => {
@@ -90,7 +124,7 @@ describe("board widget sizing", () => {
 
     await vi.waitFor(() => {
       const section = cell?.querySelector<HTMLElement>(".board-widget");
-      expect(section?.getAttribute("style")).toContain("height: 10024px");
+      expect(section?.getAttribute("style")).toContain("height: 10026px");
       expect(section?.getAttribute("style")).toContain("span 148");
     });
   });
