@@ -32,7 +32,7 @@ import {
 import "../styles/sidebar-menus.css";
 import { sessionMenuReasons } from "./session-menu-access.ts";
 import type { SessionMenuAction } from "./session-menu.ts";
-import { listAssignableSessionOwners } from "./session-owner-chip.ts";
+import { listAssignableSessionOwners, resolveAssignableOwnerFacet } from "./session-owner-chip.ts";
 import {
   isSidebarAttentionDismissed,
   isUpdateAttentionForced,
@@ -222,12 +222,11 @@ export function renderSidebarSessionMenuForController(controller: SidebarMenusCo
     isGatewayMethodAdvertised(context.gateway.snapshot, cloudWorkerStopAction.method) === true,
   );
   const selfUser = context?.gateway.snapshot.selfUser ?? null;
-  const sessionsResult = [
-    host.sessionData.sessionsResult,
-    ...Object.values(host.sessionData.sessionResultsByAgent),
-  ].find((result) => result?.sessions.some((row) => row.key === session.key));
   const ownerOptions = listAssignableSessionOwners({
-    facet: sessionsResult?.owners,
+    facet: resolveAssignableOwnerFacet([
+      host.sessionData.sessionsResult,
+      ...Object.values(host.sessionData.sessionResultsByAgent),
+    ]),
     agents: context?.agents.state.agentsList?.agents,
     self: selfUser,
   });

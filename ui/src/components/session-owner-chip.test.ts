@@ -3,7 +3,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { SessionParticipant } from "../../../packages/gateway-protocol/src/schema/session-participant.js";
 import { setAvatarGatewayOrigin } from "../lib/identity-avatar-context.ts";
-import { listAssignableSessionOwners } from "./session-owner-chip.ts";
+import { listAssignableSessionOwners, resolveAssignableOwnerFacet } from "./session-owner-chip.ts";
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -146,6 +146,73 @@ it("treats a present owner facet as authoritative before adding self and configu
       label: "Self",
     },
   ]);
+});
+
+it("offers a resolved owner facet to a conversation that no loaded list contains", () => {
+  // An archived conversation opened by its direct URL while the sidebar lists
+  // active sessions is displayed outside every loaded list. The facet is the
+  // Gateway's owner inventory for the query, not the owners of the returned
+  // rows, so it still answers who can be assigned.
+  const sidebarList = {
+    owners: [
+      { type: "human" as const, id: "profile-ada", label: "Ada" },
+      { type: "human" as const, id: "profile-bob", label: "Bob" },
+    ],
+  };
+
+  expect(resolveAssignableOwnerFacet([sidebarList, undefined])).toEqual([
+    { type: "human", id: "profile-ada", label: "Ada" },
+    { type: "human", id: "profile-bob", label: "Bob" },
+  ]);
+});
+
+it("unions owner facets across lists and keeps the first identity for a shared id", () => {
+  expect(
+    resolveAssignableOwnerFacet([
+      { owners: [{ type: "human", id: "profile-ada", label: "Ada" }] },
+      {
+        owners: [
+          { type: "human", id: "profile-ada" },
+          { type: "human", id: "profile-carol", label: "Carol" },
+        ],
+      },
+    ]),
+  ).toEqual([
+    { type: "human", id: "profile-ada", label: "Ada" },
+    { type: "human", id: "profile-carol", label: "Carol" },
+  ]);
+});
+
+it("keeps the agent identity when two lists disagree about an id's owner type", () => {
+  // Merging lists is what makes this collision reachable at all: a single facet
+  // cannot report one id twice. Downstream, both the self-overwrite guard and
+  // the configured-agent enrichment key off type === "agent", so demoting an
+  // agent to a human here would let "me" overwrite a configured agent's entry.
+  const merged = resolveAssignableOwnerFacet([
+    { owners: [{ type: "human", id: "shared-id", label: "Human first" }] },
+    { owners: [{ type: "agent", id: "shared-id", label: "Agent second" }] },
+  ]);
+  expect(merged).toEqual([{ type: "agent", id: "shared-id", label: "Agent second" }]);
+
+  // The reverse order keeps the agent too, and an agent is never demoted.
+  expect(
+    resolveAssignableOwnerFacet([
+      { owners: [{ type: "agent", id: "shared-id", label: "Agent first" }] },
+      { owners: [{ type: "human", id: "shared-id", label: "Human second" }] },
+    ]),
+  ).toEqual([{ type: "agent", id: "shared-id", label: "Agent first" }]);
+
+  // And the guard downstream still holds: self does not overwrite that entry.
+  expect(
+    listAssignableSessionOwners({ facet: merged, self: { id: "shared-id", name: "Me" } }),
+  ).toEqual([{ type: "agent", id: "shared-id", label: "Agent second" }]);
+});
+
+it("reports an unresolved owner facet while every list is still hydrating", () => {
+  // Distinct from an empty facet: callers read undefined as "not loaded yet",
+  // and an empty array as "the Gateway disclosed nobody".
+  expect(resolveAssignableOwnerFacet([undefined, {}])).toBeUndefined();
+  expect(resolveAssignableOwnerFacet([{ owners: [] }, undefined])).toEqual([]);
 });
 
 it("does not reconstruct assignment candidates when the owner facet is absent", () => {

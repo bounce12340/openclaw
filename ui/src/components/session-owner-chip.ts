@@ -12,6 +12,35 @@ import "./viewer-facepile.ts";
 export type SessionCreatedActor = ProtocolSessionCreatedActor;
 export type SessionOwnerOption = NonNullable<SessionsListResult["owners"]>[number];
 
+/**
+ * Picks the owner facet a session's assignment menu should offer. A resolved
+ * facet is the Gateway's owner inventory for that list query, not the owners of
+ * the rows it returned, so demanding the result that *contains* the row leaves a
+ * conversation opened outside every list with no facet at all. Undefined means
+ * no list has resolved yet, not that nobody is assignable.
+ */
+export function resolveAssignableOwnerFacet(
+  results: readonly ({ owners?: SessionsListResult["owners"] } | null | undefined)[],
+): SessionsListResult["owners"] {
+  let facet: Map<string, SessionOwnerOption> | undefined;
+  for (const result of results) {
+    if (result?.owners === undefined) {
+      continue;
+    }
+    facet ??= new Map();
+    for (const owner of result.owners) {
+      const existing = facet.get(owner.id);
+      // First result wins, except that an agent outranks a human for the same
+      // id: the self-overwrite guard and the roster enrichment below both key
+      // off type === "agent", so a demoted agent lets "me" overwrite it.
+      if (!existing || (existing.type !== "agent" && owner.type === "agent")) {
+        facet.set(owner.id, owner);
+      }
+    }
+  }
+  return facet ? [...facet.values()] : undefined;
+}
+
 export function listAssignableSessionOwners(params: {
   facet?: SessionsListResult["owners"];
   agents?: readonly { id: string; name?: string }[];

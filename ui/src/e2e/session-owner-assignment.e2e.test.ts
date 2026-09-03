@@ -58,6 +58,43 @@ function sessionsListResponse() {
   };
 }
 
+const archivedKey = "agent:main:archived-outcome";
+
+// The sidebar's Status filter is on Active, so the archived conversation is
+// absent from every loaded list while its owner facet still carries the whole
+// roster. Opening it by direct URL is what put it outside the lists.
+function activeOnlySessionsListResponse() {
+  const full = sessionsListResponse();
+  return {
+    ...full,
+    count: 1,
+    sessions: full.sessions.filter((session) => session.key === "agent:main:ada-research"),
+  };
+}
+
+// The Control UI resolves a directly opened session with its own key-scoped
+// sessions.list call (archived: "all", search: <key>). Serving that separately
+// from the sidebar's unfiltered list is what puts the row outside every list
+// the sidebar holds.
+function archivedLookupResponse() {
+  const full = sessionsListResponse();
+  return {
+    ...full,
+    count: 1,
+    sessions: [
+      {
+        key: archivedKey,
+        kind: "direct",
+        label: "Archived outcome",
+        archived: true,
+        createdActor: { type: "human", id: "profile-ada", label: "Ada" },
+        owner: { actor: { type: "human", id: "profile-ada", label: "Ada" } },
+        updatedAt: 3,
+      },
+    ],
+  };
+}
+
 async function installOwnerGateway(page: Page) {
   await routeAvatarFixtures(page, [{ id: "profile-ada", background: "#7c3aed", label: "A" }]);
   const gateway = await installMockGateway(page, {
@@ -135,6 +172,55 @@ suite.define(() => {
         );
         await expectBrowser(checked).toHaveCount(1);
         await expectBrowser(checked.locator(":scope > .session-menu__text")).toHaveText("Me");
+        await expectBrowser(
+          assignTo.locator(':scope > wa-dropdown-item[slot="submenu"] > .session-menu__text'),
+        ).toHaveText(["Me", "OpenClaw", "Bob", "Carol"]);
+      },
+    );
+  });
+
+  it("offers teammates on an archived conversation opened by its direct URL", async () => {
+    await suite.withPage(
+      {
+        locale: "en-US",
+        serviceWorkers: "block",
+        viewport: { height: 900, width: 1280 },
+      },
+      async ({ page }) => {
+        await routeAvatarFixtures(page, [{ id: "profile-ada", background: "#7c3aed", label: "A" }]);
+        await installMockGateway(page, {
+          featureMethods: ["chat.startup", "sessions.assignOwner"],
+          historyMessages: [{ role: "assistant", content: "Archived conversation proof." }],
+          methodResponses: {
+            "sessions.list": {
+              cases: [
+                { match: { search: archivedKey }, response: archivedLookupResponse() },
+                { response: activeOnlySessionsListResponse() },
+              ],
+            },
+          },
+          operatorScopes: ["operator.read", "operator.write"],
+          presenceUsers: [
+            {
+              self: true,
+              id: "profile-ada",
+              name: "Ada",
+              avatarUrl: "/api/users/profile-ada/avatar?v=1",
+            },
+          ],
+          sessionKey: archivedKey,
+        });
+        await page.goto(controlUiSessionUrl(suite.server.baseUrl, archivedKey));
+        await page.getByText("Archived conversation proof.", { exact: true }).waitFor();
+
+        const row = page.locator(`[data-session-key="${archivedKey}"]`);
+        await row.hover();
+        await row.getByRole("button", { name: /^Open session menu/ }).click();
+        const assignTo = page.getByRole("menuitem", { name: "Assign to…", exact: true });
+        await assignTo.hover();
+
+        // Before the facet lookup stopped demanding the result that contains the
+        // row, this menu collapsed to Me plus the configured agent.
         await expectBrowser(
           assignTo.locator(':scope > wa-dropdown-item[slot="submenu"] > .session-menu__text'),
         ).toHaveText(["Me", "OpenClaw", "Bob", "Carol"]);
