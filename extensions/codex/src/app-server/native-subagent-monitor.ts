@@ -576,7 +576,16 @@ class Monitor {
       }
       this.resumeChild(childState);
     }
-    if (parent && parent.turnIds.has(readString(params, "turnId") ?? "")) {
+    const parentTurnId = readString(params, "turnId")?.trim() ?? "";
+    const parentOwner = parent ? this.resolveParentOwner(parent, parentTurnId) : undefined;
+    // A yielded turn can still own the monitor during async teardown. Codex
+    // queues its receipt in the dormant transcript; it was not consumed by a
+    // parent model turn, so leave the child eligible for detached delivery.
+    if (
+      parent &&
+      parent.turnIds.has(parentTurnId) &&
+      parentOwner?.isTurnYielded?.() !== true
+    ) {
       this.recordNativeCompletionDelivery(parent, notification);
     }
     if (childState && !childState.terminal) {
