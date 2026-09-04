@@ -58,6 +58,7 @@ type NativeSubagentMonitorClient = Pick<
 
 type ParentOwner = {
   turnId?: string;
+  isTurnYielded?: () => boolean;
   claimDirectChild?: (threadId: string) => (() => void) | undefined;
   rejectPendingDirectChild?: (threadId: string, reason: string) => void;
   onDirectChildAccepted?: () => void;
@@ -200,6 +201,7 @@ function registerMonitor(params: {
   taskRuntimeScope?: AgentHarnessTaskRuntimeScope;
   agentId?: string;
   runtime?: NativeSubagentMonitorRuntime;
+  isTurnYielded?: () => boolean;
   retainClient?: () => (() => void) | undefined;
   retainParentThread?: (threadId: string) => (() => void) | undefined;
   claimDirectChild?: (threadId: string) => (() => void) | undefined;
@@ -268,6 +270,7 @@ function registerMonitor(params: {
     requesterSessionKey: params.requesterSessionKey,
     taskRuntimeScope: params.taskRuntimeScope,
     agentId: params.agentId,
+    isTurnYielded: params.isTurnYielded,
     claimDirectChild: params.claimDirectChild,
     rejectPendingDirectChild: params.rejectPendingDirectChild,
     onDirectChildAccepted: params.onDirectChildAccepted,
@@ -373,6 +376,7 @@ class Monitor {
     requesterSessionKey?: string;
     taskRuntimeScope?: AgentHarnessTaskRuntimeScope;
     agentId?: string;
+    isTurnYielded?: () => boolean;
     claimDirectChild?: (threadId: string) => (() => void) | undefined;
     rejectPendingDirectChild?: (threadId: string, reason: string) => void;
     onDirectChildAccepted?: () => void;
@@ -406,6 +410,7 @@ class Monitor {
     state.agentId ??= params.agentId;
     const owner = Symbol("codex-native-subagent-owner");
     state.owners.set(owner, {
+      isTurnYielded: params.isTurnYielded,
       claimDirectChild: params.claimDirectChild,
       rejectPendingDirectChild: params.rejectPendingDirectChild,
       onDirectChildAccepted: params.onDirectChildAccepted,
