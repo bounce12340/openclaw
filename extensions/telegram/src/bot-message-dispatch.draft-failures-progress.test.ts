@@ -246,6 +246,41 @@ describeTelegramDispatch("dispatchTelegramMessage draft-failures-progress", () =
     expect(deleteMessage).not.toHaveBeenCalled();
   });
 
+  it("removes unsupported link destinations from partial streaming previews", async () => {
+    const actualDraft =
+      await vi.importActual<typeof import("./draft-stream.js")>("./draft-stream.js");
+    createTelegramDraftStream.mockImplementation(actualDraft.createTelegramDraftStream);
+    const bot = createBot();
+    const sendMessage = vi.spyOn(bot.api, "sendMessage");
+    const partialText =
+      "See [Nova_Core.md](file:///home/operator/workspace/Nova_Core.md) and [docs](https://example.com/docs)";
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(
+      async ({ dispatcherOptions, replyOptions }) => {
+        await replyOptions?.onPartialReply?.({ text: partialText });
+        await dispatcherOptions.deliver({ text: partialText }, { kind: "final" });
+        return { queuedFinal: true };
+      },
+    );
+
+    await dispatchWithContext({
+      bot,
+      context: createContext({
+        ctxPayload: createDirectSessionPayload(),
+        threadSpec: { id: undefined, scope: "none" },
+        replyThreadId: undefined,
+      }),
+      streamMode: "partial",
+      telegramCfg: { streaming: { mode: "partial" } },
+    });
+
+    const sentText = String(sendMessage.mock.calls[0]?.[1] ?? "");
+    expect(sendMessage).toHaveBeenCalled();
+    expect(sentText).toContain("Nova_Core.md");
+    expect(sentText).not.toContain("file:///");
+    expect(sentText).not.toContain("/home/operator/workspace");
+    expect(sentText).toContain('<a href="https://example.com/docs">docs</a>');
+  });
+
   it("clears a pending partial and sends one fallback after an unexpected reply failure", async () => {
     const { answerDraftStream } = setupDraftStreams();
     let partialAccepted: boolean | void = undefined;
