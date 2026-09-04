@@ -5,6 +5,7 @@ import { compileGlobPatterns, matchesAnyGlobPattern } from "../agents/glob-patte
 import { normalizeToolPolicyName } from "../agents/tool-policy.js";
 import type { AnyAgentTool } from "../agents/tools/common.js";
 import { normalizeConversationReadInvocationOrigin } from "../channels/plugins/conversation-read-origin.js";
+import { isInvalidConfigError } from "../config/io.invalid-config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
   getLoadedRuntimePluginRegistry,
@@ -397,7 +398,11 @@ function resolvePluginToolFactoryEntry(params: {
     resolved = resolvePluginToolFactory(params.entry, params.pluginRegistry, params.ctx);
   } catch (err) {
     failed = true;
-    params.logError(`plugin tool failed (${params.entry.pluginId}): ${String(err)}`);
+    params.logError(
+      isInvalidConfigError(err)
+        ? `plugin tool dependency failed: ${String(err)}`
+        : `plugin tool failed (${params.entry.pluginId}): ${String(err)}`,
+    );
   }
 
   const factoryEndedAt = Date.now();
