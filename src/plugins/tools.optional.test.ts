@@ -801,7 +801,7 @@ describe("resolvePluginTools optional tools", () => {
     expect(messages[0]).toContain("plugin tool dependency failed: InvalidConfigError");
     expect(messages[0]).toContain("plugins.entries.codex.config.appServer");
     expect(messages[0]).not.toContain("memory-wiki");
-    expect(messages[1]).toBe("plugin tool failed (other-plugin): Error: factory broke");
+    expect(messages[1]).toBe("[plugins] plugin tool failed (other-plugin): Error: factory broke");
   });
 
   it("preserves class-backed plugin tool shape while scoping callbacks", async () => {
