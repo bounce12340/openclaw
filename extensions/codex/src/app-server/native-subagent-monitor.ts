@@ -581,11 +581,7 @@ class Monitor {
     // A yielded turn can still own the monitor during async teardown. Codex
     // queues its receipt in the dormant transcript; it was not consumed by a
     // parent model turn, so leave the child eligible for detached delivery.
-    if (
-      parent &&
-      parent.turnIds.has(parentTurnId) &&
-      parentOwner?.isTurnYielded?.() !== true
-    ) {
+    if (parent && parent.turnIds.has(parentTurnId) && parentOwner?.isTurnYielded?.() !== true) {
       this.recordNativeCompletionDelivery(parent, notification);
     }
     if (childState && !childState.terminal) {
