@@ -273,7 +273,7 @@ describeTelegramDispatch("dispatchTelegramMessage draft-failures-progress", () =
       telegramCfg: { streaming: { mode: "partial" } },
     });
 
-    const sentText = String(sendMessage.mock.calls[0]?.[1] ?? "");
+    const sentText = sendMessage.mock.calls[0]?.[1] ?? "";
     expect(sendMessage).toHaveBeenCalled();
     expect(sentText).toContain("Nova_Core.md");
     expect(sentText).not.toContain("file:///");
