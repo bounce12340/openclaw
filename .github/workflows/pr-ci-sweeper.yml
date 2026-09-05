@@ -47,6 +47,7 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # zizmor: ignore[github-app] v3
         id: app-token-fallback
+        continue-on-error: true
         if: steps.app-token.outcome == 'failure'
         with:
           app-id: "2971289"
