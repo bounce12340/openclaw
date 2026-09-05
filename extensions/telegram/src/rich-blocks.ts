@@ -544,6 +544,9 @@ export function markdownToTelegramRichBlocks(
   // IR's ─── text, while media/details/math stay HTML-island contracts.
   const { ir, tables } = markdownToIRWithMeta(markdown ?? "", {
     assistantTranscriptRoleHeaders: true,
+    // Parse unsafe destinations so the Telegram allowlist can retain labels
+    // without exposing rejected hrefs in rich text or its plain fallback.
+    allowUnsupportedLinkSchemes: true,
     linkify: options.skipEntityDetection !== true,
     enableSpoilers: true,
     enableTaskLists: true,

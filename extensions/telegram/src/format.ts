@@ -151,6 +151,10 @@ function preserveTelegramListBoundarySpacing(markdown: string): string {
 function parseTelegramLegacyMarkdown(markdown: string, tableMode?: MarkdownTableMode): MarkdownIR {
   return markdownToIR(preserveTelegramListBoundarySpacing(markdown ?? ""), {
     assistantTranscriptRoleHeaders: true,
+    // Parse unsafe destinations so buildTelegramLink can drop the href while
+    // retaining the visible label; MarkdownIt's default filter leaves file://
+    // links as raw source text before the transport allowlist can run.
+    allowUnsupportedLinkSchemes: true,
     linkify: true,
     enableSpoilers: true,
     headingStyle: "none",

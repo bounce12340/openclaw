@@ -275,6 +275,11 @@ function attachBlockMetadata(ir: MarkdownIR, blocks: MarkdownBlockSpan[]): Markd
 export type MarkdownParseOptions = {
   /** Mark assistant-authored transcript-role headers after Markdown parsing. */
   assistantTranscriptRoleHeaders?: boolean;
+  /**
+   * Preserve links with protocols rejected by MarkdownIt's default safety filter
+   * so the caller can apply its own transport allowlist before rendering.
+   */
+  allowUnsupportedLinkSchemes?: boolean;
   linkify?: boolean;
   enableSpoilers?: boolean;
   /** Parse authored HTML <u>/<ins> tags into underline spans. */
@@ -325,7 +330,8 @@ function createMarkdownIt(options: MarkdownParseOptions): MarkdownItParser {
     (options.enableHtmlUnderline ? 8 : 0) |
     (options.enableSpoilers ? 16 : 0) |
     (options.tableMode && options.tableMode !== "off" ? 32 : 0) |
-    (options.autolink === false ? 64 : 0);
+    (options.autolink === false ? 64 : 0) |
+    (options.allowUnsupportedLinkSchemes === true ? 128 : 0);
   const prepared = markdownParsers.get(key);
   if (prepared) {
     return prepared;
@@ -336,6 +342,9 @@ function createMarkdownIt(options: MarkdownParseOptions): MarkdownItParser {
     breaks: false,
     typographer: false,
   });
+  if (options.allowUnsupportedLinkSchemes === true) {
+    md.validateLink = () => true;
+  }
   md.linkify.set({ fuzzyLink: true });
   md.use(markdownItCjkFriendly);
   md.use(markdownItAssistantTranscriptRoles);
