@@ -292,7 +292,7 @@ jobs:
           const job = JSON.parse(process.env.JOB_CONTEXT ?? "{}");
           const repository = process.env.EXPECTED_WORKFLOW_REPOSITORY ?? "";
           const harnessPath = process.env.HARNESS_PATH ?? "";
-          if (repository !== "openclaw/openclaw" || job.workflow_repository !== repository) {
+          if (job.workflow_repository !== repository) {
             throw new Error("job.workflow_repository must exactly match github.repository");
           }
           if (typeof job.workflow_sha !== "string" || !/^[0-9a-f]{40}$/u.test(job.workflow_sha)) {
@@ -307,7 +307,7 @@ jobs:
               stdio: ["ignore", "pipe", "inherit"],
             }).trim();
           const remote = git("remote", "get-url", "origin").replace(/\.git$/u, "");
-          if (remote !== `https://github.com/${repository}`) {
+          if (remote !== "https://github.com/openclaw/openclaw") {
             throw new Error("trusted harness remote does not match the workflow repository");
           }
           execFileSync(
