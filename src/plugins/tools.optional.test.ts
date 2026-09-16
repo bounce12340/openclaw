@@ -2,6 +2,7 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_PLUGIN_TOOLS_ALLOWLIST_ENTRY } from "../agents/tool-policy.js";
+import { createInvalidConfigError } from "../config/io.invalid-config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { SecretRef } from "../config/types.secrets.js";
 import { resetLogger, setLoggerOverride } from "../logging/logger.js";
@@ -284,13 +285,13 @@ function createMalformedTool(name: string) {
   };
 }
 
-function installConsoleMethodSpy(method: "log" | "warn") {
+function installConsoleMethodSpy(method: "log" | "warn" | "error") {
   const spy = vi.fn();
   loggingState.rawConsole = {
     log: method === "log" ? spy : vi.fn(),
     info: vi.fn(),
     warn: method === "warn" ? spy : vi.fn(),
-    error: vi.fn(),
+    error: method === "error" ? spy : vi.fn(),
   };
   return spy;
 }
@@ -771,6 +772,36 @@ describe("resolvePluginTools optional tools", () => {
       { name: "array_first", pluginId: "multi", pluginSource: "/tmp/multi.js" },
       { name: "array_second:prepare", pluginId: "multi" },
     ]);
+  });
+
+  it("does not attribute invalid config errors to the current plugin", () => {
+    const errorSpy = installConsoleMethodSpy("error");
+    setLoggerOverride({ level: "silent", consoleLevel: "error" });
+    const invalidConfig = createInvalidConfigError(
+      "/tmp/openclaw.json",
+      "- plugins.entries.codex.config.appServer: invalid config",
+    );
+    setRegistry([
+      createNamedToolEntry("memory-wiki", "memory_wiki", {
+        factory: () => {
+          throw invalidConfig;
+        },
+      }),
+      createNamedToolEntry("other-plugin", "other_tool", {
+        factory: () => {
+          throw new Error("factory broke");
+        },
+      }),
+    ]);
+
+    expect(resolvePluginTools(createResolveToolsParams())).toEqual([]);
+
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    const messages = errorSpy.mock.calls.map(([message]) => String(message));
+    expect(messages[0]).toContain("plugin tool dependency failed: InvalidConfigError");
+    expect(messages[0]).toContain("plugins.entries.codex.config.appServer");
+    expect(messages[0]).not.toContain("memory-wiki");
+    expect(messages[1]).toBe("[plugins] plugin tool failed (other-plugin): Error: factory broke");
   });
 
   it("preserves class-backed plugin tool shape while scoping callbacks", async () => {
