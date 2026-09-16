@@ -41,6 +41,16 @@ describe("markdownToIR link provenance", () => {
     ]);
   });
 
+  it("can preserve rejected link schemes for caller-owned sanitization", () => {
+    const ir = markdownToIR("[local](file:///tmp/note.md)", {
+      allowUnsupportedLinkSchemes: true,
+    });
+
+    expect(collectRenderedLinks(ir)).toEqual([
+      { href: "file:///tmp/note.md", label: "local", origin: "authored" },
+    ]);
+  });
+
   it("preserves link provenance through table rendering", () => {
     const ir = markdownToIR("| File |\n| --- |\n| README.md |", { tableMode: "bullets" });
 

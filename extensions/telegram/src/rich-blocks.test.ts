@@ -475,11 +475,13 @@ describe("markdownToTelegramRichBlocks", () => {
 
   it("keeps unsupported local links as visible text and wraps file refs as code", () => {
     const { blocks } = markdownToTelegramRichBlocks(
-      "[scripts/yougile.py](/home/user/scripts/yougile.py#L41) and [config](./openclaw.json)",
+      "[scripts/yougile.py](/home/user/scripts/yougile.py#L41) and [config](./openclaw.json) and [note](file:///tmp/note.md)",
     );
     const plain = inputRichBlocksToPlainText(blocks);
     expect(plain).toContain("scripts/yougile.py");
     expect(plain).toContain("config");
+    expect(plain).toContain("note");
+    expect(plain).not.toContain("file:///");
     const text = blocks[0] && blocks[0].type === "paragraph" ? blocks[0].text : "";
     expect(collectLinkTargets(text)).toEqual([]);
   });
