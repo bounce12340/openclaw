@@ -26,6 +26,9 @@ permissions: {}
 
 jobs:
   sweep:
+    # This maintenance workflow depends on GitHub App secrets that exist only
+    # in the upstream openclaw/openclaw repository. Forks do not inherit them.
+    if: github.repository == 'openclaw/openclaw'
     permissions:
       contents: read
     runs-on: ubuntu-24.04
