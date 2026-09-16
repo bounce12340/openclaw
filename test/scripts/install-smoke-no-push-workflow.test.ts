@@ -167,6 +167,8 @@ describe("install smoke no-push root image transport", () => {
       expect(resolver.run, jobName).toContain(
         "job.workflow_sha must be a full lowercase commit SHA",
       );
+      expect(resolver.run, jobName).not.toContain('repository !== "openclaw/openclaw"');
+      expect(resolver.run, jobName).toContain('remote !== "https://github.com/openclaw/openclaw"');
       expect(resolver.run, jobName).toContain('"fetch"');
       expect(resolver.run, jobName).toContain(
         "`repository=${repository}\\nsha=${job.workflow_sha}\\n`",
@@ -205,7 +207,7 @@ describe("install smoke no-push root image transport", () => {
         encoding: "utf8",
         env: {
           ...process.env,
-          EXPECTED_WORKFLOW_REPOSITORY: "openclaw/openclaw",
+          EXPECTED_WORKFLOW_REPOSITORY: "bounce12340/openclaw",
           GITHUB_WORKFLOW_SHA: "a".repeat(40),
           HARNESS_PATH: ".",
           JOB_CONTEXT: JSON.stringify({
@@ -214,7 +216,7 @@ describe("install smoke no-push root image transport", () => {
           }),
         },
       });
-    const malformedSha = runResolver("openclaw/openclaw", "not-a-sha");
+    const malformedSha = runResolver("bounce12340/openclaw", "not-a-sha");
     expect(malformedSha.status).not.toBe(0);
     expect(malformedSha.stderr).toContain("job.workflow_sha must be a full lowercase commit SHA");
     const wrongRepository = runResolver("attacker/openclaw", "b".repeat(40));
