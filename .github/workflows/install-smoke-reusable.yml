@@ -280,6 +280,7 @@ jobs:
         id: workflow
         env:
           EXPECTED_WORKFLOW_REPOSITORY: ${{ github.repository }}
+          TRUSTED_HARNESS_REPOSITORY: openclaw/openclaw
           HARNESS_PATH: .release-harness
           JOB_CONTEXT: ${{ toJSON(job) }}
         shell: bash
@@ -291,9 +292,16 @@ jobs:
 
           const job = JSON.parse(process.env.JOB_CONTEXT ?? "{}");
           const repository = process.env.EXPECTED_WORKFLOW_REPOSITORY ?? "";
+          const trustedHarnessRepository = process.env.TRUSTED_HARNESS_REPOSITORY ?? "";
           const harnessPath = process.env.HARNESS_PATH ?? "";
-          if (repository !== "openclaw/openclaw" || job.workflow_repository !== repository) {
+          if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+            throw new Error("github.repository must be an owner/repository slug");
+          }
+          if (job.workflow_repository !== repository) {
             throw new Error("job.workflow_repository must exactly match github.repository");
+          }
+          if (trustedHarnessRepository !== "openclaw/openclaw") {
+            throw new Error("trusted harness repository is invalid");
           }
           if (typeof job.workflow_sha !== "string" || !/^[0-9a-f]{40}$/u.test(job.workflow_sha)) {
             throw new Error("job.workflow_sha must be a full lowercase commit SHA");
@@ -307,7 +315,7 @@ jobs:
               stdio: ["ignore", "pipe", "inherit"],
             }).trim();
           const remote = git("remote", "get-url", "origin").replace(/\.git$/u, "");
-          if (remote !== `https://github.com/${repository}`) {
+          if (remote !== `https://github.com/${trustedHarnessRepository}`) {
             throw new Error("trusted harness remote does not match the workflow repository");
           }
           execFileSync(

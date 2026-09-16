@@ -161,6 +161,7 @@ describe("install smoke no-push root image transport", () => {
       const resolver = step(workflowJob, "Restore exact trusted workflow revision");
       expect(resolver.env, jobName).toMatchObject({
         EXPECTED_WORKFLOW_REPOSITORY: "${{ github.repository }}",
+        TRUSTED_HARNESS_REPOSITORY: "openclaw/openclaw",
         JOB_CONTEXT: "${{ toJSON(job) }}",
       });
       expect(resolver.env?.HARNESS_PATH, jobName).toMatch(/^(\.|\.release-harness)$/u);
@@ -206,6 +207,7 @@ describe("install smoke no-push root image transport", () => {
         env: {
           ...process.env,
           EXPECTED_WORKFLOW_REPOSITORY: "openclaw/openclaw",
+          TRUSTED_HARNESS_REPOSITORY: "openclaw/openclaw",
           GITHUB_WORKFLOW_SHA: "a".repeat(40),
           HARNESS_PATH: ".",
           JOB_CONTEXT: JSON.stringify({
@@ -220,6 +222,29 @@ describe("install smoke no-push root image transport", () => {
     const wrongRepository = runResolver("attacker/openclaw", "b".repeat(40));
     expect(wrongRepository.status).not.toBe(0);
     expect(wrongRepository.stderr).toContain(
+      "job.workflow_repository must exactly match github.repository",
+    );
+    const forkRepository = spawnSync(
+      "bash",
+      ["--noprofile", "--norc", "-c", candidateResolver.run!],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          EXPECTED_WORKFLOW_REPOSITORY: "bounce12340/openclaw",
+          TRUSTED_HARNESS_REPOSITORY: "openclaw/openclaw",
+          GITHUB_WORKFLOW_SHA: "a".repeat(40),
+          HARNESS_PATH: ".",
+          JOB_CONTEXT: JSON.stringify({
+            workflow_repository: "bounce12340/openclaw",
+            workflow_sha: "b".repeat(40),
+          }),
+        },
+      },
+    );
+    expect(forkRepository.status).not.toBe(0);
+    expect(forkRepository.stderr).toContain("trusted harness path is invalid");
+    expect(forkRepository.stderr).not.toContain(
       "job.workflow_repository must exactly match github.repository",
     );
     const manifest = step(preflight, "Build install-smoke CI manifest");
